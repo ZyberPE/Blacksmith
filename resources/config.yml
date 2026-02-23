@@ -1,6 +1,10 @@
-xp_cost: 2
-messages:
-  no_item: "§cYou must hold an item in your hand!"
-  not_enough_xp: "§cYou do not have enough XP!"
-  repaired: "§aYour item has been repaired!"
-  renamed: "§aYour item has been renamed!"
+repair:
+  xp-cost: 2
+  success-message: "§aYour item has been repaired!"
+  not-enough-xp: "§cYou do not have enough XP to repair this item!"
+
+rename:
+  xp-cost: 2
+  success-message: "§aYour item has been renamed!"
+  not-enough-xp: "§cYou do not have enough XP to rename this item!"
+  default-name: "§fYour Item"
