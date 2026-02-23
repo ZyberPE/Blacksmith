@@ -1,16 +1,13 @@
 name: Blacksmith
-main: Blacksmith\Main
 version: 1.0.0
 api: 5.0.0
-author: ZyberPE
-description: Persistent Blacksmith shop with XP cost, repair, and rename
-
+main: Blacksmith\Main
 commands:
   blacksmith:
-    description: Spawn a blacksmith NPC or open shop
+    description: Open the Blacksmith GUI
     usage: "/blacksmith"
     permission: blacksmith.use
-
 permissions:
   blacksmith.use:
+    description: Allows the player to use the Blacksmith GUI
     default: true
