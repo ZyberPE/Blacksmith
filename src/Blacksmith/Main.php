@@ -9,7 +9,6 @@ use pocketmine\command\CommandSender;
 use pocketmine\item\Item;
 use pocketmine\form\MenuForm;
 use pocketmine\form\CustomForm;
-use pocketmine\world\Position;
 
 class Main extends PluginBase {
 
@@ -20,72 +19,81 @@ class Main extends PluginBase {
 
     public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool {
         if($command->getName() === "blacksmith" && $sender instanceof Player){
-            $this->openShop($sender);
+            $this->openMainMenu($sender);
             return true;
         }
         return false;
     }
 
-    public function openShop(Player $player): void {
+    // Main menu GUI
+    public function openMainMenu(Player $player): void {
         $form = new MenuForm(
             "§lBlacksmith",
-            "Select an option. Each costs §e" . $this->getConfig()->get("xp_cost") . " XP",
-            [
-                "Repair Item",
-                "Rename Item"
-            ],
+            "Select an option. Each costs §e".$this->getConfig()->get("xp_cost")." XP",
+            ["Repair Item", "Rename Item"],
             function(Player $player, ?int $data){
                 if($data === null) return;
                 if($data === 0){
-                    $this->repairItem($player);
+                    $this->openRepairConfirm($player);
                 } elseif($data === 1){
-                    $this->renameItem($player);
+                    $this->openRenameForm($player);
                 }
             }
         );
         $player->sendForm($form);
     }
 
-    public function repairItem(Player $player): void {
+    // Repair confirmation GUI
+    public function openRepairConfirm(Player $player): void {
         $xpCost = $this->getConfig()->getInt("xp_cost");
         $xpManager = $player->getXpManager();
-        $item = $player->getInventory()->getItemInHand();
+        $currentXp = $xpManager->getCurrentXp();
 
+        $item = $player->getInventory()->getItemInHand();
         if($item->isNull()){
             $player->sendMessage($this->getConfig()->get("messages")["no_item"]);
             return;
         }
 
-        if($xpManager->getCurrentXp() < $xpCost){
-            $player->sendMessage($this->getConfig()->get("messages")["not_enough_xp"]);
-            return;
-        }
-
-        $xpManager->addXp(-$xpCost);
-        $item->setDamage(0);
-        $player->getInventory()->setItemInHand($item);
-        $player->sendMessage($this->getConfig()->get("messages")["repaired"]);
+        $form = new MenuForm(
+            "§lRepair Item",
+            "XP Required: §e$xpCost\nYour XP: §a$currentXp",
+            ["Submit Repair", "Cancel"],
+            function(Player $player, ?int $data) use ($item, $xpCost, $xpManager){
+                if($data === null || $data === 1) return; // Cancel
+                if($xpManager->getCurrentXp() < $xpCost){
+                    $player->sendMessage($this->getConfig()->get("messages")["not_enough_xp"]);
+                    return;
+                }
+                $xpManager->addXp(-$xpCost);
+                $item->setDamage(0);
+                $player->getInventory()->setItemInHand($item);
+                $player->sendMessage($this->getConfig()->get("messages")["repaired"]);
+            }
+        );
+        $player->sendForm($form);
     }
 
-    public function renameItem(Player $player): void {
+    // Rename form with XP info
+    public function openRenameForm(Player $player): void {
         $xpCost = $this->getConfig()->getInt("xp_cost");
         $xpManager = $player->getXpManager();
-        $item = $player->getInventory()->getItemInHand();
+        $currentXp = $xpManager->getCurrentXp();
 
+        $item = $player->getInventory()->getItemInHand();
         if($item->isNull()){
             $player->sendMessage($this->getConfig()->get("messages")["no_item"]);
-            return;
-        }
-
-        if($xpManager->getCurrentXp() < $xpCost){
-            $player->sendMessage($this->getConfig()->get("messages")["not_enough_xp"]);
             return;
         }
 
         $form = new CustomForm(
-            "Rename Item",
+            "§lRename Item",
             [
-                "name" => [
+                "xp_info" => [
+                    "type" => "label",
+                    "text" => "XP Required: §e$xpCost\nYour XP: §a$currentXp"
+                ],
+                "new_name" => [
                     "type" => "input",
                     "text" => "Enter new name",
                     "placeholder" => $item->getCustomName() ?: $item->getName()
@@ -93,11 +101,18 @@ class Main extends PluginBase {
             ],
             function(Player $player, ?array $data) use ($item, $xpCost, $xpManager){
                 if($data === null) return;
-                $newName = trim($data["name"]);
+
+                $newName = trim($data["new_name"]);
                 if($newName === ""){
                     $player->sendMessage("§cInvalid name!");
                     return;
                 }
+
+                if($xpManager->getCurrentXp() < $xpCost){
+                    $player->sendMessage($this->getConfig()->get("messages")["not_enough_xp"]);
+                    return;
+                }
+
                 $xpManager->addXp(-$xpCost);
                 $item->setCustomName($newName);
                 $player->getInventory()->setItemInHand($item);
