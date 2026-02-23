@@ -4,7 +4,9 @@ version: 1.0.0
 api: 5.0.0
 commands:
   blacksmith:
-    description: Open the Blacksmith GUI
+    description: Open the Blacksmith menu
     usage: "/blacksmith"
     permission: blacksmith.use
-    permission-message: "You do not have permission to use this command!"
+permissions:
+  blacksmith.use:
+    default: true
