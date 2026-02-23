@@ -1,10 +1,15 @@
-repair:
-  xp-cost: 2
-  success-message: "§aYour item has been repaired!"
-  not-enough-xp: "§cYou do not have enough XP to repair this item!"
+# Blacksmith Plugin Config
 
-rename:
-  xp-cost: 2
-  success-message: "§aYour item has been renamed!"
-  not-enough-xp: "§cYou do not have enough XP to rename this item!"
-  default-name: "§fYour Item"
+# XP cost to repair an item
+repair-cost: 10
+
+# XP cost to rename an item
+rename-cost: 5
+
+# Messages
+messages:
+  not-enough-xp: "§cYou do not have enough XP!"
+  must-hold-item: "§cYou must hold an item in your hand!"
+  repair-success: "§aItem successfully repaired!"
+  rename-success: "§aItem successfully renamed to {name}!"
+  invalid-rename: "§cYou must enter a valid name!"
