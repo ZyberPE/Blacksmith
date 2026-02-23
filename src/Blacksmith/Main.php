@@ -7,12 +7,9 @@ use pocketmine\player\Player;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\item\Item;
-use pocketmine\item\enchantment\EnchantmentInstance;
-use pocketmine\item\enchantment\VanillaEnchantments;
-use pocketmine\world\sound\XpCollectSound;
-use pocketmine\utils\Config;
-use pocketmine\form\Form;
 use pocketmine\form\CustomForm;
+use pocketmine\form\ModalForm;
+use pocketmine\utils\Config;
 
 class Main extends PluginBase {
 
@@ -21,103 +18,114 @@ class Main extends PluginBase {
     public function onEnable(): void {
         @mkdir($this->getDataFolder());
         $this->saveDefaultConfig();
-        $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML, $this->getConfig()->getAll());
+        $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML, [
+            "repair-cost" => 10,
+            "rename-cost" => 5,
+            "messages" => [
+                "not-enough-xp" => "§cYou do not have enough XP!",
+                "must-hold-item" => "§cYou must hold an item in your hand!",
+                "repair-success" => "§aItem successfully repaired!",
+                "rename-success" => "§aItem successfully renamed to {name}!",
+                "invalid-rename" => "§cYou must enter a valid name!"
+            ]
+        ]);
     }
 
     public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool {
-        if(!$sender instanceof Player){
-            $sender->sendMessage("This command can only be used in-game!");
-            return true;
-        }
-
-        if(strtolower($command->getName()) === "blacksmith"){
+        if (!$sender instanceof Player) return false;
+        if (strtolower($command->getName()) === "blacksmith") {
             $this->openMainMenu($sender);
             return true;
         }
-
         return false;
     }
 
     private function openMainMenu(Player $player): void {
-        $form = new CustomForm(function(Player $player, $data){
-            if($data === null) return;
-
-            switch($data[0]){
-                case "Repair Item":
-                    $this->openRepairMenu($player);
-                    break;
-                case "Rename Item":
-                    $this->openRenameMenu($player);
-                    break;
+        $form = new ModalForm(function (Player $player, ?bool $data) {
+            if ($data === null) return;
+            if ($data === true) {
+                $this->openRepairConfirm($player);
+            } else {
+                $this->openRenameForm($player);
             }
         });
 
-        $form->setTitle("§6Blacksmith");
-        $form->addDropdown("Select an option", ["Repair Item", "Rename Item"]);
+        $form->setTitle("§lBlacksmith");
+        $form->setContent("Choose an action:");
+        $form->setButton1("Repair Item");
+        $form->setButton2("Rename Item");
         $player->sendForm($form);
     }
 
-    private function openRepairMenu(Player $player): void {
+    private function openRepairConfirm(Player $player): void {
         $item = $player->getInventory()->getItemInHand();
-        if($item->isNull()){
-            $player->sendMessage("§cYou must hold an item to repair!");
+        if ($item->isNull()) {
+            $player->sendMessage($this->config->getNested("messages.must-hold-item"));
             return;
         }
 
-        $xpCost = $this->config->get("repair")["xp-cost"];
-        $playerXp = $player->getCurrentTotalXp();
+        $cost = $this->config->get("repair-cost");
+        $xp = $player->getXpLevel();
 
-        $form = new CustomForm(function(Player $player, $data) use ($item, $xpCost){
-            if($data === null) return;
-
-            if($player->getCurrentTotalXp() < $xpCost){
-                $player->sendMessage($this->config->get("repair")["not-enough-xp"]);
-                return;
+        $form = new ModalForm(function (Player $player, ?bool $data) use ($item, $cost) {
+            if ($data === null) return;
+            if ($data) {
+                $this->repairItem($player, $item, $cost);
             }
-
-            $player->subtractXp($xpCost);
-            $item->setDamage(0); // Repair
-            $player->getInventory()->setItemInHand($item);
-            $player->sendMessage($this->config->get("repair")["success-message"]);
-            $player->getWorld()->addSound($player->getPosition(), new XpCollectSound());
         });
 
-        $form->setTitle("§6Repair Item");
-        $form->addLabel("XP Cost: $xpCost\nYour XP: $playerXp");
-        $form->addToggle("Submit Repair");
+        $form->setTitle("§lRepair Item");
+        $form->setContent("Repair this item for §e$cost XP\nYour XP: §a$xp");
+        $form->setButton1("Submit");
+        $form->setButton2("Cancel");
         $player->sendForm($form);
     }
 
-    private function openRenameMenu(Player $player): void {
+    private function repairItem(Player $player, Item $item, int $cost): void {
+        if ($player->getXpLevel() < $cost) {
+            $player->sendMessage($this->config->getNested("messages.not-enough-xp"));
+            return;
+        }
+        $player->subtractXpLevels($cost);
+        $item->setDamage(0);
+        $player->getInventory()->setItemInHand($item);
+        $player->sendMessage($this->config->getNested("messages.repair-success"));
+    }
+
+    private function openRenameForm(Player $player): void {
         $item = $player->getInventory()->getItemInHand();
-        if($item->isNull()){
-            $player->sendMessage("§cYou must hold an item to rename!");
+        if ($item->isNull()) {
+            $player->sendMessage($this->config->getNested("messages.must-hold-item"));
             return;
         }
 
-        $xpCost = $this->config->get("rename")["xp-cost"];
-        $playerXp = $player->getCurrentTotalXp();
+        $cost = $this->config->get("rename-cost");
+        $xp = $player->getXpLevel();
 
-        $form = new CustomForm(function(Player $player, $data) use ($item, $xpCost){
-            if($data === null) return;
-
-            $newName = $data[0];
-
-            if($player->getCurrentTotalXp() < $xpCost){
-                $player->sendMessage($this->config->get("rename")["not-enough-xp"]);
+        $form = new CustomForm(function (Player $player, ?array $data) use ($item, $cost) {
+            if ($data === null) return;
+            $name = trim($data[0]);
+            if ($name === "") {
+                $player->sendMessage($this->config->getNested("messages.invalid-rename"));
                 return;
             }
-
-            $player->subtractXp($xpCost);
-            $item->setCustomName($newName === "" ? $this->config->get("rename")["default-name"] : $newName);
-            $player->getInventory()->setItemInHand($item);
-            $player->sendMessage($this->config->get("rename")["success-message"]);
-            $player->getWorld()->addSound($player->getPosition(), new XpCollectSound());
+            $this->renameItem($player, $item, $name, $cost);
         });
 
-        $form->setTitle("§6Rename Item");
-        $form->addInput("Enter new item name", $this->config->get("rename")["default-name"]);
-        $form->addLabel("XP Cost: $xpCost\nYour XP: $playerXp");
+        $form->setTitle("§lRename Item");
+        $form->addInput("Enter new name for the item:", "", "");
+        $form->setContent("Rename this item for §e$cost XP\nYour XP: §a$xp");
         $player->sendForm($form);
+    }
+
+    private function renameItem(Player $player, Item $item, string $name, int $cost): void {
+        if ($player->getXpLevel() < $cost) {
+            $player->sendMessage($this->config->getNested("messages.not-enough-xp"));
+            return;
+        }
+        $player->subtractXpLevels($cost);
+        $item->setCustomName($name);
+        $player->getInventory()->setItemInHand($item);
+        $player->sendMessage(str_replace("{name}", $name, $this->config->getNested("messages.rename-success")));
     }
 }
