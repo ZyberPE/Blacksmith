@@ -10,8 +10,8 @@ use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\item\Item;
 use pocketmine\utils\TextFormat;
-use jojoe77777\FormAPI\SimpleForm;
-use jojoe77777\FormAPI\CustomForm;
+use pocketmine\form\Form;
+use pocketmine\form\FormValidationException;
 
 class Main extends PluginBase {
 
@@ -32,17 +32,33 @@ class Main extends PluginBase {
     }
 
     private function openShop(Player $player): void {
-        $form = new SimpleForm(function(Player $player, ?int $data){
+        $form = new class(function(Player $player, ?int $data){
             if($data === null) return;
             switch($data){
                 case 0: $this->repairItem($player); break;
                 case 1: $this->renameItem($player); break;
             }
-        });
+        }) implements Form {
+            private $callable;
+            public function __construct($callable){
+                $this->callable = $callable;
+            }
+            public function handleResponse(Player $player, $data): void {
+                ($this->callable)($player, $data);
+            }
+            public function jsonSerialize(): array {
+                return [
+                    "type" => "form",
+                    "title" => "Blacksmith Shop",
+                    "content" => "",
+                    "buttons" => [
+                        ["text" => "Repair Item"],
+                        ["text" => "Rename Item"]
+                    ]
+                ];
+            }
+        };
 
-        $form->setTitle(TextFormat::colorize($this->getConfig()->getNested("messages.shop-title")));
-        $form->addButton("Repair Item");
-        $form->addButton("Rename Item");
         $player->sendForm($form);
     }
 
@@ -76,7 +92,7 @@ class Main extends PluginBase {
             return;
         }
 
-        $form = new CustomForm(function(Player $player, ?array $data){
+        $form = new class(function(Player $player, ?array $data){
             if($data === null) return;
             $name = $data[0] ?? null;
             if($name === null || $name === ""){
@@ -89,10 +105,25 @@ class Main extends PluginBase {
             $player->getInventory()->setItemInHand($item);
             $player->subtractXpLevels((int)$this->getConfig()->get("xp-cost", 2));
             $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.rename-success")));
-        });
+        }) implements Form {
+            private $callable;
+            public function __construct($callable){
+                $this->callable = $callable;
+            }
+            public function handleResponse(Player $player, $data): void {
+                ($this->callable)($player, $data);
+            }
+            public function jsonSerialize(): array {
+                return [
+                    "type" => "custom_form",
+                    "title" => "Blacksmith Shop",
+                    "content" => [
+                        ["type" => "input", "text" => "Enter new name for your item:", "placeholder" => ""]
+                    ]
+                ];
+            }
+        };
 
-        $form->setTitle(TextFormat::colorize($this->getConfig()->getNested("messages.shop-title")));
-        $form->addInput("Enter new name for your item:");
         $player->sendForm($form);
     }
 }
