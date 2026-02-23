@@ -11,7 +11,6 @@ use pocketmine\command\CommandSender;
 use pocketmine\item\Item;
 use pocketmine\utils\TextFormat;
 use pocketmine\form\Form;
-use pocketmine\form\FormValidationException;
 
 class Main extends PluginBase {
 
@@ -69,14 +68,19 @@ class Main extends PluginBase {
             $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.no-item")));
             return;
         }
-        if($player->getXpLevel() < $xpCost){
+
+        $currentXp = $player->getCurrentTotalXp();
+        if($currentXp < $xpCost){
             $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.no-xp")));
             return;
         }
 
         $item->setDamage(0);
         $player->getInventory()->setItemInHand($item);
-        $player->subtractXpLevels($xpCost);
+
+        // Remove XP
+        $player->addXp(-$xpCost);
+
         $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.repair-success")));
     }
 
@@ -87,7 +91,9 @@ class Main extends PluginBase {
             $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.no-item")));
             return;
         }
-        if($player->getXpLevel() < $xpCost){
+
+        $currentXp = $player->getCurrentTotalXp();
+        if($currentXp < $xpCost){
             $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.no-xp")));
             return;
         }
@@ -103,8 +109,12 @@ class Main extends PluginBase {
             $item = $player->getInventory()->getItemInHand();
             $item->setCustomName(TextFormat::colorize($name));
             $player->getInventory()->setItemInHand($item);
-            $player->subtractXpLevels((int)$this->getConfig()->get("xp-cost", 2));
-            $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.rename-success")));
+
+            // Remove XP
+            $xpCost = (int)\Blacksmith\Main::getInstance()->getConfig()->get("xp-cost", 2);
+            $player->addXp(-$xpCost);
+
+            $player->sendMessage(TextFormat::colorize(\Blacksmith\Main::getInstance()->getConfig()->getNested("messages.rename-success")));
         }) implements Form {
             private $callable;
             public function __construct($callable){
