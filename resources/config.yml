@@ -1,9 +1,6 @@
-repair_xp_cost: 50
-rename_xp_cost: 50
+xp_cost: 2
 messages:
-  no_item: "&cYou are not holding any item!"
-  not_enough_xp: "&cYou do not have enough XP to do this!"
-  repair_success: "&aYour item has been repaired!"
-  rename_success: "&aYour item has been renamed!"
-  enter_name: "&eEnter the new name for your item:"
-rename_placeholder: "&eCustom Name"
+  no_item: "§cYou must hold an item in your hand!"
+  not_enough_xp: "§cYou do not have enough XP!"
+  repaired: "§aYour item has been repaired!"
+  renamed: "§aYour item has been renamed!"
