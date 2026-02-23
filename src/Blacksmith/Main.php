@@ -10,12 +10,14 @@ use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\item\Item;
 use pocketmine\world\Position;
-use pocketmine\entity\human\Human;
+use pocketmine\entity\Skin;
+use pocketmine\network\mcpe\protocol\types\entity\EntityLegacyIds;
 use pocketmine\event\Listener;
 use pocketmine\event\server\ServerTickEvent;
-use pocketmine\event\player\PlayerInteractEvent;
-use pocketmine\entity\Entity;
+use pocketmine\network\mcpe\protocol\PlayerActionPacket;
 use pocketmine\network\mcpe\protocol\InteractPacket;
+use pocketmine\entity\Entity;
+use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\utils\Config;
 use pocketmine\utils\TextFormat;
 use jojoe77777\FormAPI\SimpleForm;
@@ -23,8 +25,7 @@ use jojoe77777\FormAPI\CustomForm;
 
 class Main extends PluginBase implements Listener {
 
-    /** @var Human[] */
-    private array $npcs = [];
+    private array $npcs = []; // Holds NPC objects
     private Config $cfg;
     private Config $npcConfig;
 
@@ -36,8 +37,8 @@ class Main extends PluginBase implements Listener {
 
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
 
-        // Respawn NPCs on server start
-        foreach($this->npcConfig->getAll() as $name => $data){
+        // Respawn NPCs from config
+        foreach($this->npcConfig->getAll() as $uuid => $data){
             $this->spawnNPCFromData($data);
         }
     }
@@ -56,16 +57,22 @@ class Main extends PluginBase implements Listener {
         return true;
     }
 
-    private function spawnNPC(Position $pos, \pocketmine\entity\Skin $skin, string $creatorName): void {
-        $npc = new Human($pos->getWorld(), $pos);
-        $npc->setNameTag(TextFormat::colorize($this->cfg->getNested("messages.npc-name", "&bBlacksmith")));
-        $npc->setNameTagAlwaysVisible(true);
-        $npc->setSkin($skin);
-        $npc->spawnToAll();
+    private function spawnNPC(Position $pos, Skin $skin, string $creatorName): void {
+        $pk = new \pocketmine\network\mcpe\protocol\AddPlayerPacket();
+        $pk->uuid = \Ramsey\Uuid\Uuid::uuid4();
+        $pk->username = $creatorName;
+        $pk->actorRuntimeId = Entity::$entityCount++;
+        $pk->position = $pos->asVector3();
+        $pk->yaw = $pos->yaw;
+        $pk->pitch = $pos->pitch;
+        $pk->skin = $skin;
+        $pk->metadata = [];
 
-        $this->npcs[spl_object_id($npc)] = $npc;
+        foreach($this->getServer()->getOnlinePlayers() as $player){
+            $player->getNetworkSession()->sendDataPacket($pk);
+        }
 
-        // Save NPC for persistence
+        // Save NPC to config
         $this->npcConfig->set($creatorName, [
             "x" => $pos->x,
             "y" => $pos->y,
@@ -80,29 +87,16 @@ class Main extends PluginBase implements Listener {
         $world = $this->getServer()->getWorldManager()->getWorldByName($data["level"]);
         if($world === null) return;
         $pos = new Position($data["x"], $data["y"], $data["z"], $world);
-
-        $npc = new Human($world, $pos);
-        $npc->setNameTag(TextFormat::colorize($this->cfg->getNested("messages.npc-name", "&bBlacksmith")));
-        $npc->setNameTagAlwaysVisible(true);
-
-        $skinData = base64_decode($data["skin"]);
-        $skin = $npc->getSkin();
-        $skin->setSkinData($skinData);
-        $npc->setSkin($skin);
-
-        $npc->spawnToAll();
-        $this->npcs[spl_object_id($npc)] = $npc;
+        $skin = new Skin("Standard_Custom", base64_decode($data["skin"]), "", "geometry.humanoid.custom");
+        $this->spawnNPC($pos, $skin, "Blacksmith");
     }
 
-    public function onPlayerInteract(PlayerInteractEvent $event): void {
-        $player = $event->getPlayer();
-        $entity = $event->getEntity();
-        if($entity instanceof Human){
-            $npcName = TextFormat::clean($entity->getNameTag());
-            if($npcName === TextFormat::clean($this->cfg->getNested("messages.npc-name", "Blacksmith"))){
-                $this->openShop($player);
-                $event->cancel();
-            }
+    // Interaction detection
+    public function onPacketReceive(NetworkSession $session, InteractPacket $packet): void {
+        $player = $session->getPlayer();
+        $clickedId = $packet->target; // Entity ID
+        if(isset($this->npcs[$clickedId])){
+            $this->openShop($player);
         }
     }
 
