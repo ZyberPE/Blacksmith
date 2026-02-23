@@ -1,8 +1,13 @@
 name: Blacksmith
-main: Blacksmith\Main
 version: 1.0.0
 api: 5.0.0
+main: Blacksmith\Main
 commands:
   blacksmith:
     description: Open the Blacksmith GUI
     usage: "/blacksmith"
+    permission: blacksmith.use
+permissions:
+  blacksmith.use:
+    description: Allows the player to use the Blacksmith GUI
+    default: true
