@@ -1,15 +1,11 @@
 <?php
 
-declare(strict_types=1);
-
 namespace Blacksmith;
 
 use pocketmine\plugin\PluginBase;
 use pocketmine\player\Player;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
-use pocketmine\item\Item;
-use pocketmine\utils\TextFormat;
 use pocketmine\form\Form;
 
 class Main extends PluginBase {
@@ -20,36 +16,34 @@ class Main extends PluginBase {
     }
 
     public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool {
-        if(!$sender instanceof Player) return false;
-        if(!$sender->hasPermission("blacksmith.use")){
-            $sender->sendMessage(TextFormat::RED . "You do not have permission to use this command.");
+        if($command->getName() === "blacksmith" && $sender instanceof Player){
+            $this->openShop($sender);
             return true;
         }
-
-        $this->openShop($sender);
-        return true;
+        return false;
     }
 
     private function openShop(Player $player): void {
-        $form = new class(function(Player $player, ?int $data){
-            if($data === null) return;
-            switch($data){
-                case 0: $this->repairItem($player); break;
-                case 1: $this->renameItem($player); break;
-            }
-        }) implements Form {
-            private $callable;
-            public function __construct($callable){
-                $this->callable = $callable;
-            }
+        $form = new class($this, $player) implements Form {
+            public function __construct(private Main $plugin, private Player $player) {}
+            
             public function handleResponse(Player $player, $data): void {
-                ($this->callable)($player, $data);
+                if($data === null) return;
+                switch($data){
+                    case 0:
+                        $this->plugin->repairItem($player);
+                        break;
+                    case 1:
+                        $this->plugin->renameItemForm($player);
+                        break;
+                }
             }
+
             public function jsonSerialize(): array {
                 return [
                     "type" => "form",
-                    "title" => "Blacksmith Shop",
-                    "content" => "",
+                    "title" => "Blacksmith",
+                    "content" => "Choose an option:",
                     "buttons" => [
                         ["text" => "Repair Item"],
                         ["text" => "Rename Item"]
@@ -61,74 +55,75 @@ class Main extends PluginBase {
         $player->sendForm($form);
     }
 
-    private function repairItem(Player $player): void {
-        $xpCost = (int)$this->getConfig()->get("xp-cost", 2);
+    public function repairItem(Player $player): void {
         $item = $player->getInventory()->getItemInHand();
         if($item->isNull()){
-            $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.no-item")));
+            $player->sendMessage($this->getConfig()->get("messages")["no_item"]);
             return;
         }
 
-        $currentXp = $player->getCurrentTotalXp();
-        if($currentXp < $xpCost){
-            $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.no-xp")));
+        $xpCost = $this->getConfig()->getInt("repair_xp_cost");
+        $xpManager = $player->getXpManager();
+
+        if($xpManager->getCurrentXp() < $xpCost){
+            $player->sendMessage($this->getConfig()->get("messages")["not_enough_xp"]);
             return;
         }
 
         $item->setDamage(0);
         $player->getInventory()->setItemInHand($item);
 
-        // Remove XP
-        $player->addXp(-$xpCost);
-
-        $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.repair-success")));
+        $xpManager->addXp(-$xpCost);
+        $player->sendMessage($this->getConfig()->get("messages")["repair_success"]);
     }
 
-    private function renameItem(Player $player): void {
-        $xpCost = (int)$this->getConfig()->get("xp-cost", 2);
+    public function renameItemForm(Player $player): void {
         $item = $player->getInventory()->getItemInHand();
         if($item->isNull()){
-            $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.no-item")));
+            $player->sendMessage($this->getConfig()->get("messages")["no_item"]);
             return;
         }
 
-        $currentXp = $player->getCurrentTotalXp();
-        if($currentXp < $xpCost){
-            $player->sendMessage(TextFormat::colorize($this->getConfig()->getNested("messages.no-xp")));
+        $xpCost = $this->getConfig()->getInt("rename_xp_cost");
+        $xpManager = $player->getXpManager();
+
+        if($xpManager->getCurrentXp() < $xpCost){
+            $player->sendMessage($this->getConfig()->get("messages")["not_enough_xp"]);
             return;
         }
 
-        $form = new class(function(Player $player, ?array $data){
-            if($data === null) return;
-            $name = $data[0] ?? null;
-            if($name === null || $name === ""){
-                $player->sendMessage(TextFormat::RED . "You must enter a valid name.");
-                return;
-            }
-
-            $item = $player->getInventory()->getItemInHand();
-            $item->setCustomName(TextFormat::colorize($name));
-            $player->getInventory()->setItemInHand($item);
-
-            // Remove XP
-            $xpCost = (int)\Blacksmith\Main::getInstance()->getConfig()->get("xp-cost", 2);
-            $player->addXp(-$xpCost);
-
-            $player->sendMessage(TextFormat::colorize(\Blacksmith\Main::getInstance()->getConfig()->getNested("messages.rename-success")));
-        }) implements Form {
-            private $callable;
-            public function __construct($callable){
-                $this->callable = $callable;
-            }
+        $form = new class($this, $player) implements Form {
+            public function __construct(private Main $plugin, private Player $player) {}
+            
             public function handleResponse(Player $player, $data): void {
-                ($this->callable)($player, $data);
+                if($data === null || !isset($data["name"])) return;
+
+                $item = $player->getInventory()->getItemInHand();
+                if($item->isNull()) return;
+
+                $xpCost = $this->plugin->getConfig()->getInt("rename_xp_cost");
+                $xpManager = $player->getXpManager();
+                if($xpManager->getCurrentXp() < $xpCost){
+                    $player->sendMessage($this->plugin->getConfig()->get("messages")["not_enough_xp"]);
+                    return;
+                }
+
+                $item->setCustomName($data["name"]);
+                $player->getInventory()->setItemInHand($item);
+                $xpManager->addXp(-$xpCost);
+                $player->sendMessage($this->plugin->getConfig()->get("messages")["rename_success"]);
             }
+
             public function jsonSerialize(): array {
                 return [
                     "type" => "custom_form",
-                    "title" => "Blacksmith Shop",
+                    "title" => "Rename Item",
                     "content" => [
-                        ["type" => "input", "text" => "Enter new name for your item:", "placeholder" => ""]
+                        [
+                            "type" => "input",
+                            "text" => $this->plugin->getConfig()->get("messages")["enter_name"],
+                            "placeholder" => $this->plugin->getConfig()->get("rename_placeholder")
+                        ]
                     ]
                 ];
             }
