@@ -1,0 +1,11 @@
+# Blacksmith plugin config
+
+xp-cost: 2
+
+messages:
+  no-xp: "&cYou do not have enough XP to perform this action."
+  no-item: "&cYou must hold an item to perform this action."
+  repair-success: "&aYour item has been repaired!"
+  rename-success: "&aYour item has been renamed!"
+  npc-name: "&bBlacksmith"
+  shop-title: "&6Blacksmith Shop"
